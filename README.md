@@ -50,6 +50,10 @@ chmod +x agent-loop.sh
 
 # ตัวอย่าง: สั่งทำ Pentest ตรวจความปลอดภัย (จำกัดไม่เกิน 5 รอบ)
 .\agent-loop.ps1 -TargetDir "C:\projects\my-app" -Task "Audit security for OWASP Top 10 and patch vulnerabilities" -MaxRounds 5
+
+# ตัวอย่าง: สั่งรันต่อจาก Task ล่าสุดที่ยังไม่จบ (เพิ่มอีก 5 รอบ หรือตาม default 8 รอบ)
+.\agent-loop.ps1 -TargetDir "C:\projects\my-app" -Resume
+.\agent-loop.ps1 -TargetDir "C:\projects\my-app" -Resume -MaxRounds 5
 ```
 
 ---
@@ -64,7 +68,7 @@ chmod +x agent-loop.sh
 
 หรือระบุด้วย Flags:
 ```bash
-./agent-loop.sh -d "โฟลเดอร์โปรเจกต์" -t "คำสั่งที่ต้องการให้ทำ" -m [จำนวนรอบสูงสุด]
+./agent-loop.sh -d "โฟลเดอร์โปรเจกต์" -t "คำสั่งที่ต้องการให้ทำ" -m [จำนวนรอบสูงสุด] [-r|--resume]
 ```
 
 **ตัวอย่างการใช้งาน:**
@@ -74,6 +78,10 @@ chmod +x agent-loop.sh
 
 # ตัวอย่าง: รันแบบใช้ Flags กำหนดไม่เกิน 5 รอบ
 ./agent-loop.sh -d /Users/username/projects/my-app -t "Audit security for OWASP Top 10 and patch vulnerabilities" -m 5
+
+# ตัวอย่าง: สั่งรันต่อจาก Task ล่าสุดที่ยังไม่จบ (เพิ่มอีก 5 รอบ หรือตาม default 8 รอบ)
+./agent-loop.sh -d /Users/username/projects/my-app -r
+./agent-loop.sh -d /Users/username/projects/my-app -r -m 5
 ```
 
 ---

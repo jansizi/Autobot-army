@@ -1,18 +1,68 @@
 param(
     [Parameter(Mandatory=$true)][string]$TargetDir,
-    [Parameter(Mandatory=$true)][string]$Task,
-    [int]$MaxRounds = 8
+    [Parameter(Mandatory=$false)][string]$Task = "",
+    [int]$MaxRounds = 8,
+    [switch]$Resume
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 chcp 65001 > $null
 
-$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$stateDir  = Join-Path $TargetDir ".agent-loop\task-$timestamp"
-New-Item -ItemType Directory -Force -Path "$stateDir\log" | Out-Null
-$Task | Out-File -Encoding utf8 "$stateDir\current-task.md"
-$activityLog = "$stateDir\activity.log"
+# ตรวจสอบเครื่องมือก่อนเริ่ม
+foreach ($cmd in @("git", "claude", "agy", "codex")) {
+    if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
+        Write-Host "[ERROR] Command '$cmd' not found in PATH." -ForegroundColor Red
+        Write-Host "Please ensure '$cmd' is installed and in your environment PATH." -ForegroundColor Yellow
+        exit 127
+    }
+}
+
+$startRound = 1
+$endRound = $MaxRounds
+
+if ($Resume) {
+    $loopBaseDir = Join-Path $TargetDir ".agent-loop"
+    $taskDirs = Get-ChildItem -Path $loopBaseDir -Directory -Filter "task-*" -ErrorAction SilentlyContinue | Sort-Object CreationTime -Descending
+    if (-not $taskDirs -or $taskDirs.Count -eq 0) {
+        Write-Host "[ERROR] No previous task found to resume in $loopBaseDir" -ForegroundColor Red
+        exit 1
+    }
+    $stateDir = $taskDirs[0].FullName
+    if ([string]::IsNullOrWhiteSpace($Task)) {
+        $taskFile = Join-Path $stateDir "current-task.md"
+        if (Test-Path $taskFile) {
+            $Task = (Get-Content $taskFile -Raw -Encoding utf8).Trim()
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($Task)) {
+        Write-Host "[ERROR] Could not determine task description from $stateDir" -ForegroundColor Red
+        exit 1
+    }
+    # หา round ล่าสุดที่มี log
+    $lastRound = 0
+    $logs = Get-ChildItem -Path "$stateDir\log" -Filter "*round-*.log" -ErrorAction SilentlyContinue
+    foreach ($f in $logs) {
+        if ($f.Name -match "round-(\d+)\.log") {
+            $r = [int]$matches[1]
+            if ($r -gt $lastRound) { $lastRound = $r }
+        }
+    }
+    $startRound = $lastRound + 1
+    $endRound = $lastRound + $MaxRounds
+    $activityLog = "$stateDir\activity.log"
+} else {
+    if ([string]::IsNullOrWhiteSpace($Task)) {
+        Write-Host "Error: Task is required when not using -Resume." -ForegroundColor Red
+        Write-Host "Usage: .\agent-loop.ps1 -TargetDir <path> -Task <string> [-MaxRounds <int>] [-Resume]"
+        exit 1
+    }
+    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $stateDir  = Join-Path $TargetDir ".agent-loop\task-$timestamp"
+    New-Item -ItemType Directory -Force -Path "$stateDir\log" | Out-Null
+    $Task | Out-File -Encoding utf8 "$stateDir\current-task.md"
+    $activityLog = "$stateDir\activity.log"
+}
 
 function Write-Status {
     param([string]$Agent, [string]$Action, [string]$Color = "White")
@@ -72,11 +122,15 @@ function Invoke-CodexCli {
     return $exitCode
 }
 
-Write-Status -Agent "LOOP" -Action "Task: $Task | TargetDir: $TargetDir | MaxRounds: $MaxRounds" -Color Cyan
+if ($Resume) {
+    Write-Status -Agent "LOOP" -Action "RESUMING Task: $Task | Rounds: $startRound to $endRound (+$MaxRounds more) | StateDir: $stateDir" -Color Cyan
+} else {
+    Write-Status -Agent "LOOP" -Action "Task: $Task | TargetDir: $TargetDir | MaxRounds: $MaxRounds" -Color Cyan
+}
 
 Push-Location $TargetDir
 try {
-    for ($round = 1; $round -le $MaxRounds; $round++) {
+    for ($round = $startRound; $round -le $endRound; $round++) {
         Write-Status -Agent "LOOP" -Action "=== Round $round START ===" -Color Cyan
 
         git diff | Out-File -Encoding utf8 "$stateDir\current-diff.txt"
@@ -104,7 +158,7 @@ try {
             exit 0
         }
     }
-    Write-Status -Agent "LOOP" -Action "MAX ROUNDS REACHED ($MaxRounds) - needs human review" -Color Yellow
+    Write-Status -Agent "LOOP" -Action "MAX ROUNDS REACHED (Round $endRound) - needs human review" -Color Yellow
     exit 1
 }
 finally {
