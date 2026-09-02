@@ -126,7 +126,7 @@ invoke_codex_cli() {
     return $exit_code
 }
 
-write_status "LOOP" "Task: $TASK | TargetDir: $TARGET_DIR | MaxRounds: $MAXRounds" "$COLOR_CYAN"
+write_status "LOOP" "Task: $TASK | TargetDir: $TARGET_DIR | MaxRounds: $MAX_ROUNDS" "$COLOR_CYAN"
 
 ORIG_DIR=$(pwd)
 trap 'cd "$ORIG_DIR"' EXIT
